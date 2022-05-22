@@ -155,7 +155,7 @@ class iec_base {
     static const uint32_t P_AC_NA_1 = 113;  // Parameter activation
 
     // TCP连接使用固定端口号
-    static const uint32_t PORT = 2404;
+    static const uint32_t SERVERPORT = 2404;
 
    public:
     // functions
@@ -164,6 +164,8 @@ class iec_base {
     void parse(struct apdu* papdu, int sz);
     void send(const struct apdu& wapdu);
     void packetReadyTCP();
+    void showFrame(const char* buf, int size, bool isSend);
+
 
     uint32_t getSlavePort();
     void setSlavePort(uint32_t port);
@@ -176,8 +178,7 @@ class iec_base {
 
    protected:
     //
-    virtual int readTCP(char* buf,
-                        int size) = 0;  // 返回0失败，返回一个正数成功
+    virtual int readTCP(char* buf, int size) = 0;  // 返回0失败，返回一个正数成功
     virtual void sendTCP(const char* buf, int size) = 0;
 
     // TODO: 是的，显示数据

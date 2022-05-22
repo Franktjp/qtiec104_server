@@ -17,6 +17,7 @@ class MainWindow : public QMainWindow {
 private:
     Ui::MainWindow* ui;
     QIec104 iec;
+    QTimer* logTimer;
 
 public:
     MainWindow(QWidget* parent = nullptr);
@@ -30,6 +31,9 @@ private slots:
     void slotInitServerSuccess();
     void slotInitServerError();
     void slotNewConnection();
+    void slotLogTimerTimeout(); // timeout for log timer
+    void slotPbClearClicked();  // clear the contents of log tableWidget
+
 
 signals:
     // TODO:

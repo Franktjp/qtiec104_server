@@ -9,19 +9,15 @@ MainWindow::MainWindow(QWidget* parent)
     ui->twConnected->setColumnCount(2); // 设置列数
     ui->twConnected->setHorizontalHeaderLabels(QStringList() << "IP地址" << "端口");    // 设置水平表头
 
-
-
-
+    logTimer = new QTimer();
+    logTimer->start(300);
 
     connect(&iec, &QIec104::signalInitServerSuccess, this, &MainWindow::slotInitServerSuccess);
     connect(&iec, &QIec104::signalInitServerError, this, &MainWindow::slotInitServerError);
     connect(&iec, &QIec104::signalNewConnection, this, &MainWindow::slotNewConnection);
+    connect(logTimer, &QTimer::timeout, this, &MainWindow::slotLogTimerTimeout);
     connect(ui->pbInitServer, &QPushButton::clicked, &iec, &QIec104::initServer);
-
-
-
-
-
+    connect(ui->pbClear, &QPushButton::clicked, this, &MainWindow::slotPbClearClicked);
 
 }
 
@@ -31,7 +27,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::slotInitServerSuccess() {
     char buf[100];
-    sprintf(buf, "The server is running on\n\nIP: %s\nport: %d", iec.getSlaveIP(), iec.getSlavePort());
+    sprintf(buf, "INFO: The server is running on\n    IP: %s\n    port: %d", iec.getSlaveIP(), iec.getSlavePort());
     qDebug() << buf;
     iec.log.pushMsg(buf);
 
@@ -45,7 +41,7 @@ void MainWindow::slotInitServerSuccess() {
 
 void MainWindow::slotInitServerError() {
     char buf[100];
-    sprintf(buf, "Init Server: Unable to start the server: %s.",
+    sprintf(buf, "INFO: Init Server: Unable to start the server: %s.",
             iec.tcpServer->errorString().toStdString().c_str());
     iec.log.pushMsg(buf);
     qDebug() << buf;
@@ -53,7 +49,7 @@ void MainWindow::slotInitServerError() {
 
 void MainWindow::slotNewConnection() {
     char buf[100];
-    sprintf(buf, "%s: connect client ip: %s, port: %d", Q_FUNC_INFO, iec.cli->peerAddress().toString().toStdString().c_str(), iec.cli->peerPort());
+    sprintf(buf, "INFO: %s: connect client ip: %s, port: %d", Q_FUNC_INFO, iec.cli->peerAddress().toString().toStdString().c_str(), iec.cli->peerPort());
     iec.log.pushMsg(buf);
     qDebug() << buf;
 
@@ -64,6 +60,15 @@ void MainWindow::slotNewConnection() {
     ui->twConnected->setItem(nextRows, 1, new QTableWidgetItem(QString::number(iec.cli->peerPort())));
 }
 
+void MainWindow::slotLogTimerTimeout() {
+    while (iec.log.haveMsg()) {
+        ui->lwLog->addItem(iec.log.pullMsg());
+    }
+}
+
+void MainWindow::slotPbClearClicked() {
+    ui->lwLog->clear();
+}
 
 int MainWindow::getCurrentRow(QTableWidget* tw) {
     for (int i=0; i<tw->rowCount(); i++) {

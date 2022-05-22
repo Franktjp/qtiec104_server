@@ -15,8 +15,10 @@ QIec104::QIec104(QObject* parent) : QObject(parent) {
 }
 
 void QIec104::initServer() {
+    char buf[100];
+
     tcpServer = new QTcpServer(this);
-    if (!tcpServer->listen()) {
+    if (!tcpServer->listen(QHostAddress::Any, SERVERPORT)) {
         emit signalInitServerError();
         return;
     }
@@ -31,6 +33,7 @@ void QIec104::initServer() {
             break;
         }
     }
+
     // if we did not find one, use IPv4 localhost
     if (ipAddress.isEmpty()) {
         ipAddress = QHostAddress(QHostAddress::LocalHost).toString();
@@ -39,21 +42,18 @@ void QIec104::initServer() {
     setSlaveIP(ipAddress.toStdString().c_str());
     setSlavePort(tcpServer->serverPort());
 
-    char buf[100];
-    sprintf(buf, "init server success: %s(%d)",
-            ipAddress.toStdString().c_str(), tcpServer->serverPort());
+    sprintf(buf, "INFO: init server success: %s(%d)", ipAddress.toStdString().c_str(), tcpServer->serverPort());
     log.pushMsg(buf);
     qDebug() << buf;
 
     connect(this->tcpServer, &QTcpServer::newConnection, this, &QIec104::slotNewConnection);
-
     emit signalInitServerSuccess();  // success
 }
 
 
 /**
  * @brief QIec104::slotNewConnection - when a new connection is available
- * TODO: 改为通用函数，能够初始化任何一个socket
+ * TODO: 改为通用函数（带一个参数），能够初始化任何一个socket
  */
 void QIec104::slotNewConnection() {
     char buf[100];
@@ -98,9 +98,12 @@ QIec104::~QIec104() {
 
 void QIec104::terminate() {
     this->end = true;
-    this->cli->close(); // close the connection with client
-
-    // TODO
+    if (cli) {
+        cli->close(); // close the connection with client
+    }
+    if (tcpServer) {
+        tcpServer->close();
+    }
 }
 
 void QIec104::enableConnect() {
@@ -145,20 +148,21 @@ int QIec104::readTCP(char* buf, int size) {
         return 0;
     }
 
-    // TODO:
-    //    ret = (int)tcp->read(buf, size);
-    //    if (ret > 0) {
-    //        return ret;
-    //    }
+    // TODO: Now the program is single-thread and we should modify it to multi-thread
+    ret = (int)cli->read(buf, size);
+    if (ret > 0) {
+        return ret;
+    }
     return 0;
 }
 
 void QIec104::sendTCP(const char* buf, int size) {
-    // TODO:
-    //    if (this->tcp->state() == QAbstractSocket::ConnectedState) {
-    //        this->tcp->write(buf, size);
-    //        // TODO: log
-    //    }
+    if (this->cli->state() == QAbstractSocket::ConnectedState) {
+        this->cli->write(buf, size);
+        if (log.isLogging()) {
+            showFrame(buf, size, true);
+        }
+    }
 }
 
 void QIec104::slotTcpDisconnect() {

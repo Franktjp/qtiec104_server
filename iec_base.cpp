@@ -5,7 +5,7 @@
 using namespace std;
 
 iec_base::iec_base() {
-    this->slavePort = PORT;  // set iec104 tcp port to 2404
+    this->slavePort = SERVERPORT;  // set iec104 tcp port to 2404
     qstrncpy(this->slaveIP, "", 20);
     this->masterAddr = 1;  // 公共地址
 
@@ -95,7 +95,7 @@ void iec_base::packetReadyTCP() {
         brokenMsg = false;
         if (log.isLogging()) {
             int total = 25;  // 总共输出total字节
-            sprintf(buf, "--> %03d: ", int(len + 2));
+            sprintf(buf, "--> size:(%03d) ", int(len + 2));
             for (int i = 0; i < len + 2 && i < total; ++i) {
                 sprintf(buf + strlen(buf), "%02x ", br[i]);
             }
@@ -130,23 +130,24 @@ void iec_base::onTcpDisconnect() {
  */
 void iec_base::sendStartDtAct() {
     struct apdu a;
+
+    log.pushMsg("send STARTDTACT");
     a.start = START;
     a.length = 4;
     a.NS = uint16_t(STARTDTACT);
     a.NR = 0;
     send(a);
-    // TODO: 是否将log交给上层处理？
-    this->log.pushMsg("send STARTDTACT");
 }
 
 void iec_base::sendStartDtCon() {
     struct apdu a;
+
+    log.pushMsg("send STARTDTCON");
     a.start = START;
     a.length = 4;
     a.NS = uint16_t(STARTDTCON);
     a.NR = 0;
     send(a);
-    this->log.pushMsg("send STARTDTCON");
 }
 
 void iec_base::sendStopDtAct() {
@@ -348,11 +349,11 @@ void iec_base::parse(struct apdu* papdu, int size) {
 
             case C_IC_NA_1:  // 100: general interrogation
                 // case INTERROGATION:
-                // 从站收到类型标识100的报文后：
+                // 从站与主站处理过程不同
                 // 总召唤确认
                 generalInterrogationCon();
                 // 发送遥测与遥信数据
-                // TODO:
+                // TODO: 应该是需要模拟数据
 
                 // 总召唤结束
                 generalInterrogationEnd();
@@ -360,5 +361,26 @@ void iec_base::parse(struct apdu* papdu, int size) {
             default:
                 break;
         }
+    }
+}
+
+void iec_base::showFrame(const char* buf, int size, bool isSend) {
+    char buffer[200];
+
+    if (log.isLogging()) {
+        memset(buffer, 0, sizeof(buffer));
+        if (isSend) {
+            sprintf(buffer, "send --> size: (%03d) ", size);
+        } else {
+            sprintf(buffer, "receive <-- size: (%03d) ", size);
+        }
+        int cnt = 20, i;
+        for (i = 0; i < size && i < cnt; ++i) {
+            sprintf(buffer + strlen(buffer), "%02x ", buf[i]);
+        }
+        if (size > cnt) {
+            sprintf(buffer + strlen(buffer), "...");
+        }
+        log.pushMsg(buffer);
     }
 }
