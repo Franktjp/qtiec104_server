@@ -33,7 +33,7 @@ private slots:
     void slotNewConnection();
     void slotLogTimerTimeout(); // timeout for log timer
     void slotPbClearClicked();  // clear the contents of log tableWidget
-
+    void slotClientTcpDisconnect();   // client socket disconnected
 
 signals:
     // TODO:
