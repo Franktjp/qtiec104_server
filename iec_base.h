@@ -9,7 +9,7 @@
 
 struct iec_obj {
     uint32_t address;  // 3字节地址(4字节空间)
-    cp24time2a time;   // 3字节时标
+    struct cp56time2a time;   // 3字节时标
 
     float value;  // value 4 bytes float
 
@@ -157,6 +157,13 @@ public:
     // TCP连接使用固定端口号
     static const uint32_t SERVERPORT = 2404;
 
+    // 超时时间
+    static const uint32_t T0 = 30;  // 连接建立的超时
+    static const uint32_t T1 = 15;  // 发送或测试APDU的超时
+    static const uint32_t T2 = 10;  // 无数据报文t2<t1时确认的超时
+    static const uint32_t T3 = 20;  // 长期空闲t3>t1状态下发送测试帧的超时
+
+
 private:
     uint32_t slavePort;  // tcp port of slave, defaults to 9090
     char slaveIP[20];    // slave ip address
@@ -167,10 +174,18 @@ private:
     uint16_t slaveAddr;     // slave link address(common address of ASDU, ca)
 
     bool isConnected;  // tcp or udp connect status: true->connected, false->not connected
+    bool isClockSYnc;   // 是否经过时钟同步
+    bool ifCheckSeq;    // 是否检查接收、发送序列号
 
     // TODO:
-    uint16_t vs;  // 发送包数量
-    uint16_t vr;  // 接受包数量
+    uint16_t vs;  // 发送序列号
+    uint16_t vr;  // 接受序列号
+
+    // 超时控制
+    int t0Timeout; // t0超时时间
+    int t1Timeout; // t1超时时间: 发送方发送一个I报文或U报文后，必须在t1时间内得到接收方的确认，否则发送方认为TCP连接出现问题并应重新建立连接
+    int t2Timeout; // t2超时时间: 接收方在接收到I报文后，若经过t2时间未再收到新的I报文，则必须向发送方发送S报文对已经接收到的I报文进行确认，显然t2<t1
+    int t3Timeout; // t3超时时间: 调度端或子站RTU端每接收一帧I、S或U报文将重新触发计时器t3，若在t3内未接收到任何报文，将向对方发送测试链路报文。
 
 public:
     Logger log;
@@ -197,6 +212,7 @@ public:
     // 回调函数和事件处理函数通常以on开头
     void onTcpConnect();
     void onTcpDisconnect();
+    void onTimeoutPerSecond();    // 用于每秒定时处理
 
 protected:
     //
@@ -229,6 +245,8 @@ private:
     void generalInterrogationEnd();  // 总召唤结束
     void sendTelemetering(uint8_t type, bool sq);        // 模拟并发送遥测数据
     void sendTelecommunitcating(uint8_t type, bool sq);  // 模拟并发送遥信数据
+    void sendClockSyncCon();    // 确认时钟同步
+    void sendMonitorMessage();    // 发送S帧
 
 
 };

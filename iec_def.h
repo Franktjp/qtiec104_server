@@ -14,15 +14,15 @@ struct cp56time2a {
     uint8_t min : 6;  // minutes
     uint8_t res1 : 1;
     uint8_t iv : 1;    // IV
-    uint8_t hour : 6;  // hours
-    uint8_t res2 : 1;
+    uint8_t hour : 5;  // hours
+    uint8_t res2 : 2;
     uint8_t su : 1;     // SU
     uint8_t dmon : 5;   // day of month
     uint8_t dweek : 3;  // day of week
     uint8_t mon : 4;    // months
     uint8_t res3 : 4;
     uint8_t year : 7;  // years
-    uint8_t res : 1;
+    uint8_t res4 : 1;
 };
 
 /**
@@ -166,6 +166,27 @@ struct iec_type45 {
     uint8_t se : 1;  // 选择 = 1，执行 = 0
 };
 
+// 类型标识46：C_DC_NA_1  双命令
+struct iec_type46 {
+    uint8_t dcs : 2;    // 双命令状态
+    uint8_t qu : 5;
+    uint8_t se : 1;     // 选择 = 1，执行 = 0
+};
+
+// 类型标识47：C_RC_NA_1  步调节命令
+struct iec_type47 {
+    uint8_t rcs : 2;    // 步调节命令状态
+    uint8_t qu : 5;
+    uint8_t se : 1;     // 选择 = 1，执行 = 0
+};
+
+// 类型标识48：C_SE_NA_1 设定命令, 规一化值
+struct iec_type48 {
+    uint16_t nva;       // 规一化值
+    uint8_t ql : 7;     // 缺省为零
+    uint8_t se : 1;     // 选择 = 1，执行 = 0
+};
+
 // 类型标识51：C_BO_NA_1 32比特串
 struct iec_type51 {
     union {
@@ -174,9 +195,23 @@ struct iec_type51 {
     };
 };
 
+// 类型标识58：C_SC_TA_1 带时标CP56Time2a的单命令
+struct iec_type58 {
+    uint8_t scs : 1;  // 单命令状态（开 / 合）
+    uint8_t res : 1;
+    uint8_t qu : 5;  //
+    uint8_t se : 1;  // 选择 = 1，执行 = 0
+    struct cp56time2a time;
+};
+
 // 类型标识100：C_IC_NA_1 召唤命令
 struct iec_type100 {
     uint8_t qoi : 8;
+};
+
+// 类型标识103：C_CS_NA_1 时钟同步命令
+struct iec_type103 {
+    struct cp56time2a time;
 };
 
 /**
@@ -274,7 +309,25 @@ struct apdu {
             uint16_t ioa16;
             uint8_t ioa8;
             struct iec_type45 obj;
-        } sq45;
+        } nsq45;
+
+        struct {
+            uint16_t ioa16;
+            uint8_t ioa8;
+            struct iec_type46 obj;
+        } nsq46;
+
+        struct {
+            uint16_t ioa16;
+            uint8_t ioa8;
+            struct iec_type47 obj;
+        } nsq47;
+
+        struct {
+            uint16_t ioa16;
+            uint8_t ioa8;
+            struct iec_type48 obj;
+        } nsq48;
 
         struct {
             uint16_t ioa16;
@@ -282,11 +335,23 @@ struct apdu {
             struct iec_type51 obj;
         } nsq51;
 
+        struct {
+            uint16_t ioa16;
+            uint8_t ioa8;
+            struct iec_type58 obj;
+        } nsq58;
+
         struct {  // 单个信息对象
             uint16_t ioa16;
             uint8_t ioa8;
             struct iec_type100 obj;
         } nsq100;
+
+        struct {    // 单个信息对象
+            uint16_t ioa16;
+            uint8_t ioa8;
+            struct iec_type103 obj;
+        } nsq103;
 
         unsigned char data[255];  // TODO:
     };

@@ -9,7 +9,10 @@ iec_base::iec_base() {
     qstrncpy(this->slaveIP, "", 20);
     this->masterAddr = 0;   // originator address
     this->slaveAddr = 0;    // common address os ASDU
-    this->vs = this->vr = 0;
+    this->vs = 0;
+    this->vr = 0;
+    this->isClockSYnc = false;
+    this->ifCheckSeq = true;
 }
 
 uint32_t iec_base::getSlavePort() {
@@ -119,7 +122,8 @@ void iec_base::send(const struct apdu& wapdu) {
 }
 
 void iec_base::onTcpConnect() {
-    this->vr = this->vs = 0;
+    this->vr = 0;
+    this->vs = 0;
     this->isConnected = true;
     this->log.pushMsg("connect success!");
 }
@@ -129,6 +133,39 @@ void iec_base::onTcpDisconnect() {
     this->log.pushMsg("disconnect success!");
     qDebug() << "disconnect success";
 }
+
+/**
+ * @brief iec_base::onTimeoutPerSecond - when the timer is up and modify the timeout.
+ */
+void iec_base::onTimeoutPerSecond() {
+    if (isConnected) {
+        if (t1Timeout > 0) {
+            --t1Timeout;
+            if (t1Timeout == 0) {   // 超时，重新连接
+                // TODO:
+                // 超时，主动关闭
+                //            sendStartDtAct();   // t1Timeout < 0表示不需要处理
+            }
+        }
+
+        if (t2Timeout > 0) {
+            --t2Timeout;
+            if (t2Timeout == 0) {
+                sendMonitorMessage();
+                t2Timeout = -1;
+            }
+        }
+
+        if (t3Timeout > 0) {
+            --t3Timeout;
+            if (t3Timeout == 0) {
+                sendTestfrAct();
+            }
+        }
+    }
+    // TODO:
+}
+
 
 void iec_base::sendStartDtCon() {
     struct apdu a;
@@ -185,8 +222,8 @@ void iec_base::generalInterrogationCon() {
     struct apdu a;
     a.start = START;
     a.length = 0x0E;
-    a.NS = vs;
-    a.NR = vr;
+    a.NS = vs << 1;
+    a.NR = vr << 1;
     a.head.type = INTERROGATION;  // TODO: 为何是INTERROGATION
     a.head.num = 1;
     a.head.sq = 0;
@@ -200,15 +237,15 @@ void iec_base::generalInterrogationCon() {
     a.nsq100.obj.qoi = 0x14;
 
     send(a);
-    vs += 2;
+    ++vs;
 }
 
 void iec_base::generalInterrogationEnd() {
     struct apdu a;
     a.start = START;
     a.length = 0x0E;
-    a.NS = vs;
-    a.NR = vr;
+    a.NS = vs << 1;
+    a.NR = vr << 1;
     a.head.type = INTERROGATION;  // TODO: 为何是INTERROGATION
     a.head.num = 1;
     a.head.sq = 0;
@@ -222,7 +259,7 @@ void iec_base::generalInterrogationEnd() {
     a.nsq100.obj.qoi = 0x14;  // 召唤品质描述词
 
     send(a);
-    vs += 2;
+    ++vs;
 }
 
 /**
@@ -298,12 +335,12 @@ void iec_base::sendTelemetering(uint8_t type, bool sq) {
         }
 
         papdu->start = START;
-        papdu->NS = vs;
-        papdu->NR = vr;
+        papdu->NS = vs << 1;
+        papdu->NR = vr << 1;
         papdu->head.type = type;
         papdu->head.num = 2;
         papdu->head.sq = sq ? 1 : 0;
-        papdu->head.cot = INTROGEN;
+        papdu->head.cot = INTROGEN; // 传输原因：响应站召唤
         papdu->head.oa = slaveAddr;
         papdu->head.ca = masterAddr; // ASDU公共地址
     }
@@ -316,7 +353,7 @@ void iec_base::sendTelemetering(uint8_t type, bool sq) {
     }
 
     send(*papdu);
-    vs += 2;
+    ++vs;
 
     delete[] papdu;
 }
@@ -391,12 +428,12 @@ void iec_base::sendTelecommunitcating(uint8_t type, bool sq) {
         }
 
         papdu->start = START;
-        papdu->NS = vs;
-        papdu->NR = vr;
+        papdu->NS = vs << 1;
+        papdu->NR = vr << 1;
         papdu->head.type = type;
         papdu->head.num = 2;
         papdu->head.sq = sq ? 1 : 0;
-        papdu->head.cot = INTROGEN;
+        papdu->head.cot = INTROGEN; // 传输原因：响应站召唤
         papdu->head.oa = slaveAddr;
         papdu->head.ca = masterAddr; // ASDU公共地址
     }
@@ -410,14 +447,91 @@ void iec_base::sendTelecommunitcating(uint8_t type, bool sq) {
     }
 
     send(*papdu);
-    vs += 2;
+    ++vs;
 
     delete[] papdu;
 }
 
+/**
+ * @brief iec_base::sendClockSyncCon - 时钟同步确认报文
+ * TODO: address and so on.
+ */
+void iec_base::sendClockSyncCon() {
+    struct apdu wapdu;
+    stringstream oss;
+    time_t t = time(nullptr);
+    struct tm* timeinfo = localtime(&t);
+    uint32_t addr24 = 0;  // 24位信息对象地址
+
+    wapdu.start = START;
+    wapdu.length = sizeof(wapdu.NR) + sizeof(wapdu.NS) + sizeof(wapdu.head) +
+            sizeof(wapdu.nsq103);
+    wapdu.NS = vs << 1;
+    wapdu.NR = vr << 1;
+    wapdu.head.type = C_CS_NA_1;
+    wapdu.head.num = 1;  // 单信息元素
+    wapdu.head.sq = 0;   // sq = 0
+    wapdu.head.cot = ACTIVATION;  // 控制方向传送原因=激活
+    wapdu.head.pn = 0;
+    wapdu.head.t = 0;
+    wapdu.head.oa = slaveAddr;
+    wapdu.head.ca = masterAddr;
+
+    // TODO:
+    wapdu.nsq103.ioa16 = (uint16_t)addr24;
+    wapdu.nsq103.ioa8 = (uint8_t)(addr24 >> 16);
+    //    cmd.nsq103.ioa16 = (obj->address & 0xFFFF);
+    //    cmd.nsq103.ioa8 = (obj->address >> 16);
+
+    wapdu.nsq103.obj.time.year = timeinfo->tm_year % 100;  // [0...99]
+    wapdu.nsq103.obj.time.mon = timeinfo->tm_mon + 1;
+    wapdu.nsq103.obj.time.dmon = timeinfo->tm_mday;
+    wapdu.nsq103.obj.time.dweek = timeinfo->tm_wday;
+    wapdu.nsq103.obj.time.hour = timeinfo->tm_hour;
+    wapdu.nsq103.obj.time.min = timeinfo->tm_min;
+    wapdu.nsq103.obj.time.mesc = timeinfo->tm_sec * 1000;
+    wapdu.nsq103.obj.time.res1 = wapdu.nsq103.obj.time.res2 =
+            wapdu.nsq103.obj.time.res3 = wapdu.nsq103.obj.time.res4 = 0;
+    wapdu.nsq103.obj.time.iv = 0;
+    wapdu.nsq103.obj.time.su = 0;
+
+    send(wapdu);
+    ++vs;
+    return;
+
+    if (log.isLogging()) {
+        oss << "CLOCK SYNCHRONIZATION\n    ADDRESS" << (uint32_t)addr24
+            << ", TYPE: " << (uint32_t)wapdu.head.type
+            << ", COT: " << (uint32_t)wapdu.head.cot;
+
+        oss << "\n    TIME.YEAR" << (uint32_t)wapdu.nsq103.obj.time.year  // 年 2022
+            << ", TIME.MONTH" << (uint32_t)wapdu.nsq103.obj.time.mon      // 月 5
+            << ", TIME.DAY" << (uint32_t)wapdu.nsq103.obj.time.dmon       // 日 24
+            << ", TIME.HOUR" << (uint32_t)wapdu.nsq103.obj.time.hour      // 时 14
+            << ", TIME.MIN" << (uint32_t)wapdu.nsq103.obj.time.min        // 分 53
+            << ", TIME.SRC" << (uint32_t)timeinfo->tm_sec;             // 秒 21
+        log.pushMsg(oss.str().c_str());
+    }
+}
+
+/**
+ * @brief iec_base::sendMonitorFrame
+ */
+void iec_base::sendMonitorMessage() {
+    struct apdu wapdu;
+    wapdu.start = START;
+    wapdu.length = 4;
+    wapdu.NS = SUPERVISORY;
+    wapdu.NR = vr;
+    send(wapdu);
+    char buf[100];
+    sprintf(buf, "send monitor frame(S), the N(R) is %d", wapdu.NR);
+    log.pushMsg(buf);
+}
+
 void iec_base::parse(struct apdu* papdu, int size) {
     struct apdu wapdu;  // 缓冲区组装发送apdu
-    uint16_t vr_new;    // TODO
+    uint16_t vrReceived;
     stringstream ss;
 
     if (papdu->start != START) {
@@ -437,10 +551,6 @@ void iec_base::parse(struct apdu* papdu, int size) {
             log.pushMsg("receive STARTDTACT");
             sendStartDtCon();
         } break;
-        case STARTDTCON:
-            // TODO:
-            log.pushMsg("receice STARTDTCON");
-            break;
         case STOPDTACT: {  // 停止数据传送命令
             log.pushMsg("receive STOPDTACT");
             sendStopDtCon();
@@ -450,10 +560,12 @@ void iec_base::parse(struct apdu* papdu, int size) {
             break;
         case TESTFRACT: {
             // 链路测试命令
-            log.pushMsg("   TESTFRACT");
+            log.pushMsg("receive TESTFRACT");
             sendTestfrCon();
         } break;
-        case TESTFRCON:  // 链路测试命令确认
+        case SUPERVISORY: { // S帧
+            // TODO: 收到S帧
+        }
             break;
         default:
             log.pushMsg("ERROR: unknown control message");
@@ -462,6 +574,23 @@ void iec_base::parse(struct apdu* papdu, int size) {
     } else {
         // TODO:
         // code...
+
+        // check vr
+        vrReceived = papdu->NS >> 1;
+        if (vrReceived != vr) {
+            ss.str("");
+            ss << "ERROR: N(R) is " << uint32_t(this->vr) << ", but the N(S) of I message is " << uint32_t(vrReceived);
+            log.pushMsg(ss.str().c_str());
+            if (ifCheckSeq) {
+                ss.str("");
+                ss << "WARNING: start to disconnect tcp";
+                log.pushMsg(ss.str().c_str());
+                tcpDisconnect();
+                return;
+            }
+        } else {
+            ++vr;
+        }
 
         ss.str("");
         ss << "     COT: " << papdu->head.ca << "; TYP: " << papdu->head.type
@@ -477,8 +606,7 @@ void iec_base::parse(struct apdu* papdu, int size) {
             // TODO:
 
         } break;
-        case M_SP_TA_1:  // 2: single-point information with time
-            // tag(cp24time2a)
+        case M_SP_TA_1:  // 2: single-point information with time tag(cp24time2a)
             break;
         case M_BO_NA_1: {  // 7: bitstring of 32 bits
             // 监视方向过程信息的应用服务数据单元
@@ -518,8 +646,7 @@ void iec_base::parse(struct apdu* papdu, int size) {
             dataIndication(piecarr, papdu->head.num);
             delete[] piecarr;
         } break;
-        case M_BO_TA_1:  // 8: bitstring of 32 bits with time
-            // tag(cp24time2a)
+        case M_BO_TA_1:  // 8: bitstring of 32 bits with time tag(cp24time2a)
             break;
         case C_SC_NA_1:  // 45: single command
             break;
@@ -528,7 +655,8 @@ void iec_base::parse(struct apdu* papdu, int size) {
         case M_EI_NA_1:  // 70:end of initialization(初始化结束)
             break;
 
-        case C_IC_NA_1:  // 100: general interrogation
+        case C_IC_NA_1: {
+            // 100: general interrogation
             // 从站：总召唤确认、发送遥测与遥信数据、总召唤结束
             // 总召唤确认
             generalInterrogationCon();
@@ -537,11 +665,50 @@ void iec_base::parse(struct apdu* papdu, int size) {
             sendTelemetering(13, false);        // 遥测
             // 总召唤结束
             generalInterrogationEnd();
+        }
+            break;
+        case C_CS_NA_1: {   // 103: clock sync
+            struct iec_obj* piecarr = new iec_obj[1];
+            uint32_t addr24 = 0;  // 24位信息对象地址
+
+            /**
+             * NOTE:被控站初始化后，在时钟同步命令前上传的所有带时标报文其时标中的无效（ invalid）位应
+             * 置Ⅰ(即时标无效)，其后置О（即时标有效);若被控站在站对时周期内未收到控制站发出的“时钟同步
+             * 命令”，则 invalid位也应置l;
+             */
+            isClockSYnc = true;
+
+            addr24 = papdu->nsq103.ioa16 + ((uint32_t)papdu->nsq103.ioa8 << 16);
+            piecarr[0].address = addr24;
+            piecarr[0].type = papdu->head.type;
+            piecarr[0].ca = papdu->head.ca;
+            piecarr[0].cause = papdu->head.cot;
+            piecarr[0].pn = papdu->head.pn;
+            piecarr[0].time = papdu->nsq103.obj.time;
+
+            dataIndication(piecarr, 1);
+            delete[] piecarr;
+
+            // send confirm message
+            sendClockSyncCon();
+        }
             break;
         default:
             break;
         }
     }
+
+    // TODO: 修改策略
+    if (t2Timeout < 0) {
+        t2Timeout = T2;
+    } else if (t2Timeout == 0) {
+        t2Timeout = -1;
+        sendMonitorMessage();
+    } else {    // t2Timeout > 0
+        --t2Timeout;
+    }
+
+    t3Timeout = T3;
 }
 
 void iec_base::showFrame(const char* buf, int size, bool isSend) {
