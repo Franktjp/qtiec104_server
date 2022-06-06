@@ -67,7 +67,7 @@ void Logger::pushMsg(const char* msg, unsigned int level) {
         this->logList.size() < this->maxMsg) {
         this->logList.push_back(msg);
         if (this->isRegTime) {
-            timeList.push_back(QTime());
+            timeList.push_back(time(NULL));
         }
     }
 }
@@ -76,29 +76,28 @@ void Logger::pushMsg(const char* msg, unsigned int level) {
  * @brief LogMsg::pullMsg 从队列中删除消息
  * @return
  */
-QString Logger::pullMsg() {
-    if (this->logList.empty() || !this->isLogable)
+string Logger::pullMsg() {
+    if (logList.empty() || !isLogable)
         return "";
 
-    QString s = logList.front();
+    string s;
+    s = logList.front(); // 返回列表中第一个元素并删除列表中该元素
     logList.pop_front();
 
     if (isRegTime) {
         char buf[201];
-        static QTime hora_ant;
-        QTime hora = this->timeList.front();
-        //        time_t hora = timeList.front();
+        static time_t t_pre;
+        time_t t_front = timeList.front();
         timeList.pop_front();
-        if (hora != hora_ant) {
+        if (t_front != t_pre) {
             struct tm* timeinfo;
-            // FIXME:
-            //            timeinfo = localtime(&hora);
+            timeinfo = localtime(&t_front);
             strftime(buf, 200, "%H:%M:%S", timeinfo);
             s = buf + s;
         } else {
             s = "         " + s;
         }
-        hora_ant = hora;
+        t_pre = t_front;
     }
     return s;
 }

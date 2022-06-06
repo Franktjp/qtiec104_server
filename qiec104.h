@@ -5,7 +5,7 @@
 #include <QTimer>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QTcpServer>
-#include <QtNetwork/QNetworkInterface>>
+#include <QtNetwork/QNetworkInterface>
 
 #include "iec_base.h"
 

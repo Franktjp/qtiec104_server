@@ -1,12 +1,10 @@
 #include "iec_base.h"
-#include <QString>
-#include <sstream>
 
 using namespace std;
 
 iec_base::iec_base() {
     this->slavePort = SERVERPORT;  // set iec104 tcp port to 2404
-    qstrncpy(this->slaveIP, "", 20);
+    strncpy(this->slaveIP, "", 20);
     this->masterAddr = 0;   // originator address
     this->slaveAddr = 0;    // common address os ASDU
     this->vs = 0;
@@ -33,7 +31,7 @@ char* iec_base::getSlaveIP() {
 }
 
 void iec_base::setSlaveIP(const char* ip) {
-    qstrncpy(this->slaveIP, ip, 20);
+    strncpy(this->slaveIP, ip, 20);
 }
 
 uint16_t iec_base::getSlaveAddr() {
@@ -136,7 +134,6 @@ void iec_base::onTcpConnect() {
 void iec_base::onTcpDisconnect() {
     this->isConnected = false;
     this->log.pushMsg("disconnect success!");
-    qDebug() << "disconnect success";
 }
 
 /**

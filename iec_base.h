@@ -4,6 +4,9 @@
 #include "iec_def.h"
 #include "logmsg.h"
 
+#include <sstream>
+#include <string.h>
+
 #pragma pack(push)
 #pragma pack(1)
 

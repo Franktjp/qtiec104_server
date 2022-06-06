@@ -86,7 +86,7 @@ void MainWindow::slotNewConnection() {
 
 void MainWindow::slotLogTimerTimeout() {
     while (iec.log.haveMsg()) {
-        ui->lwLog->addItem(iec.log.pullMsg());
+        ui->lwLog->addItem(iec.log.pullMsg().c_str());
     }
 }
 
