@@ -163,6 +163,9 @@ public:
     static const uint32_t T2 = 10;  // 无数据报文t2<t1时确认的超时
     static const uint32_t T3 = 20;  // 长期空闲t3>t1状态下发送测试帧的超时
 
+    // 参数k和参数w
+    static const uint32_t SERVERK = 12; // 参数k，表示发送方在有k个I报文未得到确认时，停止数据传送
+    static const uint32_t SERVERW = 1;  // 参数w，表示接收方最多在接收了w个I报文后应发出确认。对于子站RTU端来说，每收到一个调度端的I报文都应立即进行响应，其w的取值实际上为1
 
 private:
     uint32_t slavePort;  // tcp port of slave, defaults to 9090
@@ -175,11 +178,14 @@ private:
 
     bool isConnected;  // tcp or udp connect status: true->connected, false->not connected
     bool isClockSYnc;   // 是否经过时钟同步
-    bool ifCheckSeq;    // 是否检查接收、发送序列号
+    bool ifCheckSeq;    // 是否检查发送、接收序列号并在报文丢失时断开连接
+    bool allowSend;     // 是否允许发送报文，受参数k和参数w控制
 
-    // TODO:
     uint16_t vs;  // 发送序列号
     uint16_t vr;  // 接受序列号
+
+    uint32_t numMsgUnack;       // 未确认I格式报文数量
+    uint32_t numMsgReceived;    //  已接收I格式报文数量
 
     // 超时控制
     int t0Timeout; // t0超时时间
@@ -194,8 +200,7 @@ public:
 public:
     // functions
     iec_base();
-    // parse APDU
-    void parse(struct apdu* papdu, int sz);
+    void parse(struct apdu* papdu, int sz, bool isSend = true);
     void send(const struct apdu& wapdu);
     void packetReadyTCP();
     void showFrame(const char* buf, int size, bool isSend);

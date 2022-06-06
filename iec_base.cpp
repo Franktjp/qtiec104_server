@@ -13,6 +13,11 @@ iec_base::iec_base() {
     this->vr = 0;
     this->isClockSYnc = false;
     this->ifCheckSeq = true;
+    this->allowSend = true;
+
+    this->numMsgUnack = 0;
+    this->numMsgReceived = 0;
+
 }
 
 uint32_t iec_base::getSlavePort() {
@@ -112,7 +117,7 @@ void iec_base::packetReadyTCP() {
             }
             log.pushMsg(buf);
         }
-        parse(&a, a.length + 2);
+        parse(&a, a.length + 2, true);
         break;
     }
 }
@@ -220,11 +225,13 @@ void iec_base::sendTestfrCon() {
 
 void iec_base::generalInterrogationCon() {
     struct apdu a;
+    stringstream ss;
+
     a.start = START;
     a.length = 0x0E;
     a.NS = vs << 1;
     a.NR = vr << 1;
-    a.head.type = INTERROGATION;  // TODO: 为何是INTERROGATION
+    a.head.type = INTERROGATION;
     a.head.num = 1;
     a.head.sq = 0;
     a.head.cot = ACTCONFIRM;  // 7: 激活确认
@@ -236,12 +243,24 @@ void iec_base::generalInterrogationCon() {
     a.nsq100.ioa8 = 0x00;
     a.nsq100.obj.qoi = 0x14;
 
-    send(a);
-    ++vs;
+    if (allowSend) {
+        send(a);
+        ++vs;
+        ++numMsgUnack;
+        if (numMsgUnack == SERVERK) {
+            allowSend = false;
+        }
+    } else {
+        ss.str("");
+        ss << "WARNING: 已达到最大未确认报文数k(" << SERVERK << "), 停止报文发送";
+        log.pushMsg(ss.str().c_str());
+    }
 }
 
 void iec_base::generalInterrogationEnd() {
     struct apdu a;
+    stringstream ss;
+
     a.start = START;
     a.length = 0x0E;
     a.NS = vs << 1;
@@ -258,8 +277,18 @@ void iec_base::generalInterrogationEnd() {
     a.nsq100.ioa8 = 0x00;
     a.nsq100.obj.qoi = 0x14;  // 召唤品质描述词
 
-    send(a);
-    ++vs;
+    if (allowSend) {
+        send(a);
+        ++vs;
+        ++numMsgUnack;
+        if (numMsgUnack == SERVERK) {
+            allowSend = false;
+        }
+    } else {
+        ss.str("");
+        ss << "WARNING: 已达到最大未确认报文数k(" << SERVERK << "), 停止报文发送";
+        log.pushMsg(ss.str().c_str());
+    }
 }
 
 /**
@@ -268,7 +297,7 @@ void iec_base::generalInterrogationEnd() {
  * @param sq    - 是否连续值
  */
 void iec_base::sendTelemetering(uint8_t type, bool sq) {
-    char buf[100];
+    stringstream ss;
     struct apdu* papdu;
     int num;
     int len;
@@ -346,14 +375,25 @@ void iec_base::sendTelemetering(uint8_t type, bool sq) {
     }
         break;
     default:
-        sprintf(buf, "ERROR: type %d is not implemented!", uint32_t(type));
-        log.pushMsg(buf);
+        ss.str("");
+        ss << "ERROR: type " << uint32_t(type) << " is not implemented!";
+        log.pushMsg(ss.str().c_str());
         return;
         break;
     }
 
-    send(*papdu);
-    ++vs;
+    if (allowSend) {
+        send(*papdu);
+        ++vs;
+        ++numMsgUnack;
+        if (numMsgUnack == SERVERK) {
+            allowSend = false;
+        }
+    } else {
+        ss.str("");
+        ss << "WARNING: 已达到最大未确认报文数k(" << SERVERK << "), 停止报文发送";
+        log.pushMsg(ss.str().c_str());
+    }
 
     delete[] papdu;
 }
@@ -365,7 +405,7 @@ void iec_base::sendTelemetering(uint8_t type, bool sq) {
  * @param sq    - 是否连续值
  */
 void iec_base::sendTelecommunitcating(uint8_t type, bool sq) {
-    char buf[100];
+    stringstream ss;
     struct apdu* papdu;
     int num;
     int len;
@@ -440,14 +480,25 @@ void iec_base::sendTelecommunitcating(uint8_t type, bool sq) {
         break;
 
     default:
-        sprintf(buf, "ERROR: type %d is not implemented!", uint32_t(type));
-        log.pushMsg(buf);
+        ss.str("");
+        ss << "ERROR: type " << uint32_t(type) << " is not implemented!";
+        log.pushMsg(ss.str().c_str());
         return;
         break;
     }
 
-    send(*papdu);
-    ++vs;
+    if (allowSend) {
+        send(*papdu);
+        ++vs;
+        ++numMsgUnack;
+        if (numMsgUnack == SERVERK) {
+            allowSend = false;
+        }
+    } else {
+        ss.str("");
+        ss << "WARNING: 已达到最大未确认报文数k(" << SERVERK << "), 停止报文发送";
+        log.pushMsg(ss.str().c_str());
+    }
 
     delete[] papdu;
 }
@@ -458,7 +509,7 @@ void iec_base::sendTelecommunitcating(uint8_t type, bool sq) {
  */
 void iec_base::sendClockSyncCon() {
     struct apdu wapdu;
-    stringstream oss;
+    stringstream ss;
     time_t t = time(nullptr);
     struct tm* timeinfo = localtime(&t);
     uint32_t addr24 = 0;  // 24位信息对象地址
@@ -495,22 +546,37 @@ void iec_base::sendClockSyncCon() {
     wapdu.nsq103.obj.time.iv = 0;
     wapdu.nsq103.obj.time.su = 0;
 
-    send(wapdu);
-    ++vs;
+
+    if (allowSend) {
+        send(wapdu);
+        ++vs;
+        ++numMsgUnack;
+        if (numMsgUnack == SERVERK) {
+            allowSend = false;
+        }
+    } else {
+        ss.str("");
+        ss << "WARNING: 已达到最大未确认报文数k(" << SERVERK
+           << "), 停止报文发送";
+        log.pushMsg(ss.str().c_str());
+    }
+
     return;
 
+    // TODO: 啥意思捏，为啥return了
     if (log.isLogging()) {
-        oss << "CLOCK SYNCHRONIZATION\n    ADDRESS" << (uint32_t)addr24
-            << ", TYPE: " << (uint32_t)wapdu.head.type
-            << ", COT: " << (uint32_t)wapdu.head.cot;
+        ss.str("");
+        ss << "CLOCK SYNCHRONIZATION\n    ADDRESS" << (uint32_t)addr24
+           << ", TYPE: " << (uint32_t)wapdu.head.type
+           << ", COT: " << (uint32_t)wapdu.head.cot;
 
-        oss << "\n    TIME.YEAR" << (uint32_t)wapdu.nsq103.obj.time.year  // 年 2022
-            << ", TIME.MONTH" << (uint32_t)wapdu.nsq103.obj.time.mon      // 月 5
-            << ", TIME.DAY" << (uint32_t)wapdu.nsq103.obj.time.dmon       // 日 24
-            << ", TIME.HOUR" << (uint32_t)wapdu.nsq103.obj.time.hour      // 时 14
-            << ", TIME.MIN" << (uint32_t)wapdu.nsq103.obj.time.min        // 分 53
-            << ", TIME.SRC" << (uint32_t)timeinfo->tm_sec;             // 秒 21
-        log.pushMsg(oss.str().c_str());
+        ss << "\n    TIME.YEAR" << (uint32_t)wapdu.nsq103.obj.time.year  // 年 2022
+           << ", TIME.MONTH" << (uint32_t)wapdu.nsq103.obj.time.mon      // 月 5
+           << ", TIME.DAY" << (uint32_t)wapdu.nsq103.obj.time.dmon       // 日 24
+           << ", TIME.HOUR" << (uint32_t)wapdu.nsq103.obj.time.hour      // 时 14
+           << ", TIME.MIN" << (uint32_t)wapdu.nsq103.obj.time.min        // 分 53
+           << ", TIME.SRC" << (uint32_t)timeinfo->tm_sec;             // 秒 21
+        log.pushMsg(ss.str().c_str());
     }
 }
 
@@ -519,17 +585,24 @@ void iec_base::sendClockSyncCon() {
  */
 void iec_base::sendMonitorMessage() {
     struct apdu wapdu;
+    stringstream ss;
     wapdu.start = START;
     wapdu.length = 4;
     wapdu.NS = SUPERVISORY;
-    wapdu.NR = vr;
+    wapdu.NR = vr << 1;
     send(wapdu);
-    char buf[100];
-    sprintf(buf, "send monitor frame(S), the N(R) is %d", wapdu.NR);
-    log.pushMsg(buf);
+    ss.str("");
+    ss << "send monitor frame(S), the N(R) is " << wapdu.NR;
+    log.pushMsg(ss.str().c_str());
 }
 
-void iec_base::parse(struct apdu* papdu, int size) {
+/**
+ * @brief iec_base::parse
+ * @param papdu
+ * @param size
+ * @param isSend - If we want to send the result to server. This parameter
+ */
+void iec_base::parse(struct apdu* papdu, int size, bool isSend) {
     struct apdu wapdu;  // 缓冲区组装发送apdu
     uint16_t vrReceived;
     stringstream ss;
@@ -564,7 +637,20 @@ void iec_base::parse(struct apdu* papdu, int size) {
             sendTestfrCon();
         } break;
         case SUPERVISORY: { // S帧
-            // TODO: 收到S帧
+            log.pushMsg("INFO: receive SUPERVISORY");
+            if (vs >= papdu->NR) {  // NOTE: 考虑到NR可能比当前vs小
+                numMsgUnack = vs - papdu->NR;
+                if (numMsgUnack < SERVERK) {
+                    allowSend = true;
+                }
+            } else {
+                ss.str("");
+                ss << "ERROR: wrong N(R) of SUPERVISORY message=" << papdu->NR
+                   << ", while current vs is " << vs;
+                log.pushMsg(ss.str().c_str());
+                // TODO: disconnect
+                return;
+            }
         }
             break;
         default:
@@ -590,6 +676,23 @@ void iec_base::parse(struct apdu* papdu, int size) {
             }
         } else {
             ++vr;
+        }
+
+        // check vs
+        if (vs >= papdu->NR) {
+            numMsgUnack = vs - papdu->NR;
+            if (numMsgUnack < SERVERK) {
+                allowSend = true;
+            }
+        } else {
+            ss.str("");
+            // TODO: 输出好难看
+            ss << "ERROR: wrong N(R) of type(" << papdu->head.type
+               << ") msg, the N(R) is " << papdu->NR << ", while current vs is "
+               << vs;
+            log.pushMsg(ss.str().c_str());
+            // TODO: disconnect
+            return;
         }
 
         ss.str("");
@@ -709,6 +812,15 @@ void iec_base::parse(struct apdu* papdu, int size) {
     }
 
     t3Timeout = T3;
+
+    // check parameter `k` and `w`
+    if (isSend) {
+        ++numMsgReceived;
+        if (numMsgReceived == SERVERW) {
+            sendMonitorMessage();
+            numMsgReceived = 0;
+        }
+    }
 }
 
 void iec_base::showFrame(const char* buf, int size, bool isSend) {
