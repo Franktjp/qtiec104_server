@@ -6,6 +6,7 @@ QIec104::QIec104(QObject* parent) : QObject(parent) {
 
     this->tm = new QTimer();
     this->log.activateLog();
+    this->log.activateTime();
     this->cli = nullptr;
     this->tcpServer = nullptr;
 
@@ -160,7 +161,7 @@ void QIec104::sendTCP(const char* buf, int size) {
     if (this->cli->state() == QAbstractSocket::ConnectedState) {
         this->cli->write(buf, size);
         if (log.isLogging()) {
-            showFrame(buf, size, true);
+            showMessage(buf, size, true);
         }
     }
 }

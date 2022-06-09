@@ -64,7 +64,7 @@ int Logger::count() {
  */
 void Logger::pushMsg(const char* msg, unsigned int level) {
     if (this->isLogable && this->level <= level &&
-        this->logList.size() < this->maxMsg) {
+            this->logList.size() < this->maxMsg) {
         this->logList.push_back(msg);
         if (this->isRegTime) {
             timeList.push_back(time(NULL));
@@ -81,23 +81,59 @@ string Logger::pullMsg() {
         return "";
 
     string s;
+    time_t t_front = NULL;
+
     s = logList.front(); // 返回列表中第一个元素并删除列表中该元素
     logList.pop_front();
 
     if (isRegTime) {
         char buf[201];
         static time_t t_pre;
-        time_t t_front = timeList.front();
+        t_front = timeList.front();
         timeList.pop_front();
         if (t_front != t_pre) {
             struct tm* timeinfo;
             timeinfo = localtime(&t_front);
-            strftime(buf, 200, "%H:%M:%S", timeinfo);
-            s = buf + s;
+            strftime(buf, sizeof(buf), "%H:%M:%S", timeinfo);
+            s = buf + string(" - ") + s;
         } else {
-            s = "         " + s;
+            s = "           " + s;
         }
         t_pre = t_front;
     }
+    saveMsg(s);
     return s;
+}
+
+/**
+ * @brief Logger::saveMsg - Save message to file. The log files are in a folder
+ * called build***
+ * @param msg
+ */
+void Logger::saveMsg(const std::string& msg) {
+    time_t rawtime;
+    static mutex mx;
+    struct tm* timeInfo;
+    std::string day;
+    std::string file;
+    std::ofstream outFile;
+
+    mx.lock();
+
+    time(&rawtime);
+    timeInfo = localtime(&rawtime);
+    day = to_string(timeInfo->tm_year + 1900) + string("_") +
+            to_string(timeInfo->tm_mon + 1) + string("_") +
+            to_string(timeInfo->tm_mday);
+    file = string("log/log_") + day +
+            string(".txt");  // such as `log_2022_6_9.txt`
+    outFile.open(file, ios::out | ios::app);
+    if (outFile.is_open()) {
+        // NOTE: 检测目录是否存在是可以的，但是不同系统下方式不同，因此省略吧
+        outFile << day << ": " << msg << "\n";
+        outFile.flush();
+        outFile.close();
+    }
+
+    mx.unlock();
 }
