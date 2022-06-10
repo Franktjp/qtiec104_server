@@ -6,6 +6,7 @@
 
 #include <sstream>
 #include <string.h>
+#include <unordered_map>
 
 #pragma pack(push)
 #pragma pack(1)
@@ -161,10 +162,10 @@ public:
     static const uint32_t SERVERPORT = 2404;
 
     // 超时时间
-    static const uint32_t T0 = 30;  // 连接建立的超时
-    static const uint32_t T1 = 15;  // 发送或测试APDU的超时
-    static const uint32_t T2 = 10;  // 无数据报文t2<t1时确认的超时
-    static const uint32_t T3 = 20;  // 长期空闲t3>t1状态下发送测试帧的超时
+    static const uint32_t T0 = 3000;  // 连接建立的超时
+    static const uint32_t T1 = 1500;  // 发送或测试APDU的超时
+    static const uint32_t T2 = 1000;  // 无数据报文t2<t1时确认的超时
+    static const uint32_t T3 = 2000;  // 长期空闲t3>t1状态下发送测试帧的超时
 
     // 参数k和参数w
     static const uint32_t SERVERK = 12; // 参数k，表示发送方在有k个I报文未得到确认时，停止数据传送
@@ -199,14 +200,15 @@ private:
 public:
     Logger log;
 
+    std::unordered_map<int, std::string> umapType2String;
 
 public:
     // functions
     iec_base();
     void parse(struct apdu* papdu, int sz, bool isSend = true);
     void send(const struct apdu& wapdu);
-    void packetReadyTCP();
-    void showFrame(const char* buf, int size, bool isSend);
+    void messageReadyRead();
+    void showMessage(const char* buf, int size, bool isSend);
 
 
     uint32_t getSlavePort();
@@ -255,6 +257,8 @@ private:
     void sendTelecommunitcating(uint8_t type, bool sq);  // 模拟并发送遥信数据
     void sendClockSyncCon();    // 确认时钟同步
     void sendMonitorMessage();    // 发送S帧
+
+    void initServer();
 
 
 };

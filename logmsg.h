@@ -33,6 +33,7 @@ public:
     bool haveMsg();
     bool isLogging();
     int count();
+    void clear();
     void pushMsg(const char* msg, unsigned int level = 0);
     std::string pullMsg();
     void saveMsg(const std::string& msg);

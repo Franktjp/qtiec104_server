@@ -113,11 +113,10 @@ void QIec104::enableConnect() {
 
 void QIec104::disableConnect() {
     this->allowConnect = false;
-    return;
-    // TODO:
-    //    if (this->tcp->state() == QAbstractSocket::ConnectedState) {
-    //        tcpDisconnect();
-    //    }
+    // TODO: test
+    if (this->cli->state() == QAbstractSocket::ConnectedState) {
+        tcpDisconnect();
+    }
 }
 
 void QIec104::tcpConnect() {
@@ -180,11 +179,11 @@ void QIec104::slotTcpReadyRead() {
             ++i;
         }
     }
-    packetReadyTCP();
+    messageReadyRead();
 }
 
 void QIec104::slotTcpError(QAbstractSocket::SocketError err) {
-    //    if (err != QAbstractSocket::SocketTimeoutError) {   // TODO: 为啥要这样
+    //    if (err != QAbstractSocket::SocketTimeoutError) {   // TODO:
     // TODO:
     char buf[100];
     sprintf(buf, "socket error : %d(%s)", err,

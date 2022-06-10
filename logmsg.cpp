@@ -45,6 +45,11 @@ void Logger::deactivateTime() {
     this->isRegTime = false;
 }
 
+void Logger::clear() {
+    this->logList.clear();
+    this->timeList.clear();
+}
+
 bool Logger::haveMsg() {
     return !this->logList.empty();
 }

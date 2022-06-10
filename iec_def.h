@@ -187,6 +187,11 @@ struct iec_type48 {
     uint8_t se : 1;     // 选择 = 1，执行 = 0
 };
 
+// 类型标识49：C_SE_NB_1 设定命令, 标度化值
+struct iec_type49 {
+    // TODO:
+};
+
 // 类型标识51：C_BO_NA_1 32比特串
 struct iec_type51 {
     union {
